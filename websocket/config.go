@@ -39,6 +39,9 @@ type Config struct {
 	// Log is an optional logger. Any logger implementation can be used as long as it
 	// implements the basic Logger interface. Omitting this will disable client logging.
 	Log Logger
+
+	// ProxyURL is the URL of the proxy to use for the WebSocket connection.
+	ProxyURL string
 }
 
 func (c *Config) validate() error {

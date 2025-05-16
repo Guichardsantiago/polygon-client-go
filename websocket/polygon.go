@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -50,6 +51,8 @@ type Client struct {
 
 	reconnectCallback func(error)
 	log               Logger
+
+	proxyURL string
 }
 
 // New creates a client for the Polygon WebSocket API.
@@ -72,6 +75,7 @@ func New(config Config) (*Client, error) {
 		err:                  make(chan error),
 		log:                  config.Log,
 		reconnectCallback:    config.ReconnectCallback,
+		proxyURL:             config.ProxyURL,
 	}
 
 	uri, err := url.Parse(string(c.feed))
@@ -177,8 +181,20 @@ func (c *Client) Close() {
 	c.close(false)
 }
 
-func newConn(uri string) (*websocket.Conn, error) {
-	conn, res, err := websocket.DefaultDialer.Dial(uri, nil)
+func newConn(uri string, proxyURL string) (*websocket.Conn, error) {
+	var dialer *websocket.Dialer
+	if proxyURL != "" {
+		proxyURLParsed, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid proxy URL: %w", err)
+		}
+		dialer = &websocket.Dialer{
+			Proxy: http.ProxyURL(proxyURLParsed),
+		}
+	} else {
+		dialer = websocket.DefaultDialer
+	}
+	conn, res, err := dialer.Dial(uri, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial server: %w", err)
 	} else if res.StatusCode != 101 {
@@ -199,7 +215,7 @@ func newConn(uri string) (*websocket.Conn, error) {
 func (c *Client) connect(reconnect bool) func() error {
 	return func() error {
 		// dial the server
-		conn, err := newConn(c.url)
+		conn, err := newConn(c.url, c.proxyURL)
 		if err != nil {
 			return err
 		}
